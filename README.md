@@ -4,9 +4,13 @@
 [![rank](https://make.fun/badge/gta6-twitch-ccu-forecast-01/cffilham-jpg/makefun-gta6-forecast-01/rank.svg)](https://make.fun/bounty/gta6-twitch-ccu-forecast-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-twitch-ccu-forecast-01)
 [![reward](https://make.fun/badge/gta6-twitch-ccu-forecast-01/cffilham-jpg/makefun-gta6-forecast-01/reward.svg)](https://make.fun/bounty/gta6-twitch-ccu-forecast-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-twitch-ccu-forecast-01)
 
-An offline, deterministic forecast of GTA VI's launch-day Twitch viewers for hours 2–24 UTC. Each input's complete comparable launch days supply hourly log-ratios relative to hour 1. Their median supplies the forecast center; their IQR supplies a robust log spread, floored at 0.12 and multiplied by 0.55. Profiles are learned at runtime, with no filtering by unlock notes, game, platform, or date.
+An offline, deterministic v2 forecast of GTA VI's launch-day Twitch viewers for hours 2–24 UTC. Complete comparable launch days supply hourly log-ratios relative to hour 1. A Gaussian kernel weights comparables by how closely their pre-release 24-hour peak relative to hour 1 matches the case's own signal. The bandwidth starts at 0.2 and widens while the effective sample size is below six, up to the specified 0.8 stopping threshold.
+
+Interpolated weighted percentiles supply the 65th-percentile center and an IQR-based log spread, floored at 0.12 and multiplied by 0.55. Missing comparable pre-signals use the available signals' median. Without a usable case or comparable pre-signal, the forecast uses uniform weights and a median center; without complete comparables, it uses persistence. Profiles are learned at runtime, with no filtering by unlock notes, game, platform, or date.
 
 Python standard library only. Unexpected per-case errors fall back to hour-1 persistence. No practice answers or fitted hourly profiles are shipped.
+
+Local practice validation: mean pinball loss **0.186060** (v1: 0.268294), typical miss **30.97%**, and 90% coverage **0.826**. These practice results do not guarantee final performance.
 
 ## Run it
 
