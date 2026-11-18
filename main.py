@@ -1,4 +1,12 @@
-"""Offline launch-day quantiles learned from the supplied launch histories."""
+"""Offline launch-day quantiles learned from the supplied launch histories.
+
+v3: Gaussian-kernel weighting of comparables by pre-release-signal similarity
+(bandwidth 0.5, widening while ESS < 6), with the forecast center adapted to
+the case's hour-1 audience concentration: a launch spread over many channels
+(low viewers/channel) grows more through the day than one concentrated in a
+few big streams, so the center percentile shifts up when the target's
+viewers/channel is below the comparables' median and down when above.
+"""
 
 import json
 import math
@@ -68,6 +76,7 @@ def pre_signal(points, timestamp_key, start, first):
 def estimate(case, value):
     profiles = []
     signals = []
+    vc_values = []
     for launch in case.get("comparables", []):
         try:
             start = instant(launch["day_start"])
@@ -81,6 +90,14 @@ def estimate(case, value):
             profiles.append([math.log(max(1.0, count) / counts[0])
                              for count in counts[1:]])
             signals.append(signal)
+            channels_at_one = None
+            for point in launch["hourly"]:
+                if instant(point["from"]) == start:
+                    channels_at_one = point.get("channels")
+                    break
+            vc_values.append(math.log(counts[0] / float(channels_at_one))
+                             if channels_at_one and float(channels_at_one) > 0
+                             else None)
         except (KeyError, TypeError, ValueError, OverflowError):
             continue
     if not profiles:
@@ -96,7 +113,7 @@ def estimate(case, value):
     if signal is not None and available:
         replacement = median(available)
         features = [replacement if s is None else s for s in signals]
-        bandwidth = 0.2
+        bandwidth = 0.5
         while True:
             weights = [math.exp(-((s - signal) / bandwidth) ** 2)
                        for s in features]
@@ -105,7 +122,18 @@ def estimate(case, value):
             if ess >= 6 or bandwidth >= 0.8:
                 break
             bandwidth *= 1.25
-        center_fraction = 0.65
+        center_fraction = 0.70
+    if center_fraction != 0.5:
+        # Adapt the center to audience concentration: below-median
+        # viewers/channel (broad audience) shifts the center up, above-median
+        # (concentrated audience) shifts it down. Clipped to [0.45, 0.72].
+        known_one = next((row for row in case["known"]
+                          if row.get("hour") == 1), None)
+        channels = known_one.get("channels") if known_one else None
+        available_vc = [v for v in vc_values if v is not None]
+        if channels and float(channels) > 0 and available_vc:
+            center_fraction = min(0.72, max(0.45, 0.70 + 0.20 * (
+                median(available_vc) - math.log(first / float(channels)))))
     rows = []
     for index, hour in enumerate(range(2, 25)):
         sample = [(profile[index], weight)
